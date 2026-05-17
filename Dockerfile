@@ -1,11 +1,10 @@
-FROM node:26-bookworm-slim AS frontend
-WORKDIR /app
+FROM node:26-bookworm-slim AS builder
+WORKDIR /app/frontend
 RUN npm install -g pnpm@10.33.0
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY frontend/package.json ./frontend/package.json
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc ./
 RUN pnpm install --frozen-lockfile
-COPY frontend ./frontend
-RUN pnpm --dir frontend build
+COPY frontend ./
+RUN pnpm build
 
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS backend
 WORKDIR /app/backend
@@ -15,7 +14,7 @@ RUN apt-get update \
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --locked --no-dev
 COPY backend ./
-COPY --from=frontend /app/frontend/dist ./public
+COPY --from=builder /app/frontend/dist ./public
 ENV HOST=0.0.0.0 \
     PORT=8788 \
     INPUT_DRIVER=fake

@@ -29,17 +29,22 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm --dir frontend install --frozen-lockfile
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
+        working-directory: frontend
         run: pnpm typecheck
 
       - name: Build frontend
+        working-directory: frontend
         run: pnpm build
 
       - name: Build backend static assets
+        working-directory: frontend
         run: pnpm build:backend
 
   backend:
@@ -90,7 +95,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Login to GitHub Container Registry
         if: github.event_name == 'push'
