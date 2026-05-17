@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser Controller</title>
+    <script type="module" src="/src/client.ts"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Browser Controller</p>
+        <h1>Remote Gamepad</h1>
+        <p class="copy">
+          Connect a local gamepad, join the room, and send standard Xbox-style
+          controller changes to the gateway.
+        </p>
+      </section>
+
+      <section class="panel">
+        <label>
+          Room token
+          <input id="token" autocomplete="off" value="dev" />
+        </label>
+        <button id="connect" type="button">Connect</button>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Connection</h2>
+          <dl>
+            <div>
+              <dt>Status</dt>
+              <dd id="connection-status">Disconnected</dd>
+            </div>
+            <div>
+              <dt>Player</dt>
+              <dd id="player">Unassigned</dd>
+            </div>
+            <div>
+              <dt>Gateway</dt>
+              <dd id="gateway">/ws</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="card">
+          <h2>Gamepad</h2>
+          <dl>
+            <div>
+              <dt>Status</dt>
+              <dd id="gamepad-status">Press any gamepad button</dd>
+            </div>
+            <div>
+              <dt>Name</dt>
+              <dd id="gamepad-name">None</dd>
+            </div>
+            <div>
+              <dt>Packets</dt>
+              <dd id="packets">0</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <section class="card">
+        <h2>Normalized State</h2>
+        <pre id="state">Waiting for gamepad input...</pre>
+      </section>
+    </main>
+  </body>
+</html>
