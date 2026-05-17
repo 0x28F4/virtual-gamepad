@@ -1,9 +1,6 @@
 node_modules/
 dist/
 frontend/dist/
-.env
-.venv/
 backend/.venv/
 backend/public/
-__pycache__/
-*.pyc
+.git/
