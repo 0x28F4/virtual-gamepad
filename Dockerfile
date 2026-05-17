@@ -1,6 +1,6 @@
 FROM node:26-bookworm-slim AS frontend
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+RUN npm install -g pnpm@10.33.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY frontend/package.json ./frontend/package.json
 RUN pnpm install --frozen-lockfile
