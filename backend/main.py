@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -71,29 +70,10 @@ class InputDevice(ABC):
 
 
 class FakeInputDevice(InputDevice):
-    def __init__(self) -> None:
-        self._last_log_at: dict[int, float] = {}
-
     def update_state(self, player: int, state: dict[str, Any]) -> None:
-        now = asyncio.get_running_loop().time()
-        if now - self._last_log_at.get(player, 0) < 1:
-            return
-
-        self._last_log_at[player] = now
-        axes = state["axes"]
-        pressed_buttons = [name for name in BUTTON_NAMES if state["buttons"][name]["pressed"]]
-        logging.info(
-            "P%s left=(%.2f, %.2f) right=(%.2f, %.2f) buttons=%s",
-            player,
-            axes["leftX"],
-            axes["leftY"],
-            axes["rightX"],
-            axes["rightY"],
-            ",".join(pressed_buttons) or "none",
-        )
+        logging.info("fake input applied player=%s %s", player, summarize_state(state))
 
     def release(self, player: int) -> None:
-        self._last_log_at.pop(player, None)
         logging.info("P%s released", player)
 
 
@@ -206,6 +186,16 @@ def neutral_state() -> dict[str, Any]:
     }
 
 
+def summarize_state(state: dict[str, Any]) -> str:
+    axes = state["axes"]
+    pressed_buttons = [name for name in BUTTON_NAMES if state["buttons"][name]["pressed"]]
+    return (
+        f"left=({axes['leftX']:.2f},{axes['leftY']:.2f}) "
+        f"right=({axes['rightX']:.2f},{axes['rightY']:.2f}) "
+        f"buttons={','.join(pressed_buttons) or 'none'}"
+    )
+
+
 def parse_input_message(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict) or value.get("type") != "input":
         return None
@@ -309,6 +299,12 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                 continue
 
             latest_seq = input_message["seq"]
+            logging.info(
+                "input received player=%s seq=%s %s",
+                player,
+                input_message["seq"],
+                summarize_state(input_message["state"]),
+            )
             input_device.update_state(player, input_message["state"])
     finally:
         input_device.release(player)

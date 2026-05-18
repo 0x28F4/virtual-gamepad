@@ -28,6 +28,8 @@ connectButton.addEventListener("click", () => {
 });
 
 window.addEventListener("gamepadconnected", (event) => {
+  if (isVirtualOutputGamepad(event.gamepad)) return;
+
   selectedGamepadIndex = event.gamepad.index;
   gamepadStatus.textContent = "Connected";
   gamepadName.textContent = event.gamepad.id;
@@ -103,6 +105,9 @@ function tick(): void {
       sentPackets += 1;
       packetsElement.textContent = sentPackets.toString();
     }
+  } else {
+    gamepadStatus.textContent = "Press any physical gamepad button";
+    gamepadName.textContent = "None";
   }
 
   requestAnimationFrame(tick);
@@ -112,11 +117,15 @@ function getGamepad(): Gamepad | null {
   const gamepads = navigator.getGamepads();
 
   if (selectedGamepadIndex !== null) {
-    return gamepads[selectedGamepadIndex] ?? null;
+    const selectedGamepad = gamepads[selectedGamepadIndex] ?? null;
+    if (selectedGamepad && !isVirtualOutputGamepad(selectedGamepad)) return selectedGamepad;
+
+    selectedGamepadIndex = null;
   }
 
   for (const gamepad of gamepads) {
     if (!gamepad) continue;
+    if (isVirtualOutputGamepad(gamepad)) continue;
 
     selectedGamepadIndex = gamepad.index;
     gamepadStatus.textContent = "Connected";
@@ -125,6 +134,13 @@ function getGamepad(): Gamepad | null {
   }
 
   return null;
+}
+
+function isVirtualOutputGamepad(gamepad: Gamepad): boolean {
+  return (
+    gamepad.id.includes("Browser Gamepad P") ||
+    gamepad.id.includes("Vendor: 28de Product: 11ff")
+  );
 }
 
 function normalizeGamepad(gamepad: Gamepad): ControllerState {
