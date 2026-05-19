@@ -7,3 +7,5 @@ backend/.venv/
 backend/public/
 __pycache__/
 *.pyc
+*.log
+backend/logs/

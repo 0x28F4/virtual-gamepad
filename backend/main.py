@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import logging.config
+import math
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -40,6 +42,8 @@ class Config:
     room_token: str
     max_players: int
     input_driver: str
+    log_input: bool
+    log_file: Path
     public_dir: Path
 
 
@@ -59,7 +63,7 @@ class PlayerSlots:
         self._occupied.discard(player)
 
 
-class InputDevice(ABC):
+class DeviceController(ABC):
     @abstractmethod
     def update_state(self, player: int, state: dict[str, Any]) -> None:
         pass
@@ -69,15 +73,33 @@ class InputDevice(ABC):
         pass
 
 
-class FakeInputDevice(InputDevice):
+class TuiDeviceController(DeviceController):
+    def __init__(self, max_players: int) -> None:
+        self._tui = None
+        from gamepad_tui import GamepadTui
+
+        tui = GamepadTui(max_players)
+        if tui.start():
+            self._tui = tui
+            logging.info("controller TUI started")
+        else:
+            logging.info("controller TUI disabled because terminal is not interactive")
+
     def update_state(self, player: int, state: dict[str, Any]) -> None:
-        logging.info("fake input applied player=%s %s", player, summarize_state(state))
+        if self._tui:
+            self._tui.update_state(player, state)
 
     def release(self, player: int) -> None:
+        if self._tui:
+            self._tui.release(player)
         logging.info("P%s released", player)
 
+    def close(self) -> None:
+        if self._tui:
+            self._tui.stop()
 
-class UInputDevice(InputDevice):
+
+class UInputDeviceController(DeviceController):
     def __init__(self, max_players: int) -> None:
         import uinput
 
@@ -229,14 +251,14 @@ def parse_input_message(value: Any) -> dict[str, Any] | None:
 
 
 def is_number(value: Any) -> bool:
-    return isinstance(value, int | float) and value == value
+    return isinstance(value, int | float) and math.isfinite(value)
 
 
-def create_input_device(config: Config) -> InputDevice:
+def create_device_controller(config: Config) -> DeviceController:
     if config.input_driver == "fake":
-        return FakeInputDevice()
+        return TuiDeviceController(config.max_players)
     if config.input_driver == "uinput":
-        return UInputDevice(config.max_players)
+        return UInputDeviceController(config.max_players)
     raise ValueError(f"Unsupported INPUT_DRIVER={config.input_driver!r}")
 
 
@@ -264,7 +286,7 @@ async def static_handler(request: web.Request) -> web.StreamResponse:
 async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     config: Config = request.app["config"]
     players: PlayerSlots = request.app["players"]
-    input_device: InputDevice = request.app["input_device"]
+    device_controller: DeviceController = request.app["device_controller"]
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -299,15 +321,16 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                 continue
 
             latest_seq = input_message["seq"]
-            logging.info(
-                "input received player=%s seq=%s %s",
-                player,
-                input_message["seq"],
-                summarize_state(input_message["state"]),
-            )
-            input_device.update_state(player, input_message["state"])
+            if config.log_input:
+                logging.info(
+                    "input received player=%s seq=%s %s",
+                    player,
+                    input_message["seq"],
+                    summarize_state(input_message["state"]),
+                )
+            device_controller.update_state(player, input_message["state"])
     finally:
-        input_device.release(player)
+        device_controller.release(player)
         players.release(player)
         logging.info("controller disconnected player=%s", player)
 
@@ -315,37 +338,79 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
 
 
 def load_config() -> Config:
+    input_driver = os.environ.get("INPUT_DRIVER", "fake")
     return Config(
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8788")),
         room_token=os.environ.get("ROOM_TOKEN", "dev"),
         max_players=int(os.environ.get("MAX_PLAYERS", "4")),
-        input_driver=os.environ.get("INPUT_DRIVER", "fake"),
+        input_driver=input_driver,
+        log_input=os.environ.get("LOG_INPUT") == "1",
+        log_file=Path(os.environ.get("LOG_FILE", Path(__file__).with_name("logs") / "gateway.log")),
         public_dir=Path(os.environ.get("PUBLIC_DIR", Path(__file__).with_name("public"))),
     )
+
+
+def configure_logging(config: Config) -> None:
+    config.log_file.parent.mkdir(parents=True, exist_ok=True)
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                }
+            },
+            "handlers": {
+                "file": {
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": str(config.log_file),
+                    "maxBytes": 1_000_000,
+                    "backupCount": 3,
+                    "formatter": "default",
+                    "encoding": "utf-8",
+                }
+            },
+            "root": {
+                "level": "DEBUG",
+                "handlers": ["file"],
+            },
+        }
+    )
+
+
+async def cleanup_device_controller(app: web.Application) -> None:
+    close = getattr(app["device_controller"], "close", None)
+    if close:
+        close()
 
 
 def build_app(config: Config) -> web.Application:
     app = web.Application()
     app["config"] = config
     app["players"] = PlayerSlots(config.max_players)
-    app["input_device"] = create_input_device(config)
+    app["device_controller"] = create_device_controller(config)
     app.router.add_get("/health", health)
     app.router.add_get("/ws", websocket_handler)
     app.router.add_get("/", static_handler)
     app.router.add_get("/{path:.*}", static_handler)
+    app.on_cleanup.append(cleanup_device_controller)
     return app
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     config = load_config()
+    configure_logging(config)
     logging.info(
-        "starting gateway host=%s port=%s driver=%s max_players=%s public_dir=%s",
+        "starting gateway host=%s port=%s driver=%s max_players=%s log_input=%s log_file=%s public_dir=%s",
         config.host,
         config.port,
         config.input_driver,
         config.max_players,
+        config.log_input,
+        config.log_file,
         config.public_dir,
     )
     web.run_app(build_app(config), host=config.host, port=config.port)
