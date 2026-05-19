@@ -35,4 +35,8 @@ The gateway always fans controller input out to Linux uinput, the terminal input
 visualizer, and the log file. Logs are written to `backend/logs/gateway.log` by
 default.
 
+When running in Docker, the terminal visualizer is available through `docker
+attach` if the container was started with a TTY. Detach without stopping the
+container with `Ctrl-p` then `Ctrl-q`.
+
 Start the backend before the emulator so the virtual controllers are detected.

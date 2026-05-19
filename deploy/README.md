@@ -23,3 +23,19 @@ docker compose up -d
 ```
 
 The compose file pulls `ghcr.io/0x28f4/virtual-gamepad:latest`, runs it with `/dev/uinput` access, and exposes port `8788`.
+
+Attach to the terminal input visualizer:
+
+```bash
+docker attach virtual-gamepad
+```
+
+Detach without stopping the container with `Ctrl-p` then `Ctrl-q`. `Ctrl+C` stops
+the gateway.
+
+If the container was already running before this compose file enabled TTY support,
+recreate it first:
+
+```bash
+docker compose up -d --force-recreate
+```

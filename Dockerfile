@@ -16,6 +16,8 @@ RUN uv sync --locked --no-dev
 COPY backend ./
 COPY --from=builder /app/frontend/dist ./public
 ENV HOST=0.0.0.0 \
-    PORT=8788
+    PORT=8788 \
+    TERM=xterm-256color \
+    PYTHONUNBUFFERED=1
 EXPOSE 8788
-CMD ["uv", "run", "python", "src/main.py"]
+CMD [".venv/bin/python", "src/main.py"]

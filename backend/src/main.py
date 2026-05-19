@@ -5,6 +5,7 @@ import logging
 import logging.config
 import math
 import os
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -377,6 +378,26 @@ def load_config() -> Config:
 
 def configure_logging(config: Config) -> None:
     config.log_file.parent.mkdir(parents=True, exist_ok=True)
+    handlers: dict[str, dict[str, Any]] = {
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(config.log_file),
+            "maxBytes": 1_000_000,
+            "backupCount": 3,
+            "formatter": "default",
+            "encoding": "utf-8",
+        }
+    }
+    root_handlers = ["file"]
+
+    if not sys.stdout.isatty():
+        handlers["console"] = {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "default",
+        }
+        root_handlers.append("console")
+
     logging.config.dictConfig(
         {
             "version": 1,
@@ -387,19 +408,10 @@ def configure_logging(config: Config) -> None:
                     "datefmt": "%Y-%m-%d %H:%M:%S",
                 }
             },
-            "handlers": {
-                "file": {
-                    "class": "logging.handlers.RotatingFileHandler",
-                    "filename": str(config.log_file),
-                    "maxBytes": 1_000_000,
-                    "backupCount": 3,
-                    "formatter": "default",
-                    "encoding": "utf-8",
-                }
-            },
+            "handlers": handlers,
             "root": {
                 "level": "DEBUG",
-                "handlers": ["file"],
+                "handlers": root_handlers,
             },
         }
     )

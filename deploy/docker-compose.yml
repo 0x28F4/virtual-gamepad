@@ -3,6 +3,8 @@ services:
     image: ghcr.io/0x28f4/virtual-gamepad:latest
     container_name: virtual-gamepad
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     privileged: true
     devices:
       - /dev/uinput:/dev/uinput
@@ -10,5 +12,6 @@ services:
       - "8788:8788"
     environment:
       ROOM_TOKEN: "${ROOM_TOKEN:-dev}"
+      TERM: "xterm-256color"
     volumes:
       - /etc/localtime:/etc/localtime:ro
