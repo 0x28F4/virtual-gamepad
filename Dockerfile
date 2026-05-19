@@ -16,7 +16,6 @@ RUN uv sync --locked --no-dev
 COPY backend ./
 COPY --from=builder /app/frontend/dist ./public
 ENV HOST=0.0.0.0 \
-    PORT=8788 \
-    INPUT_DRIVER=fake
+    PORT=8788
 EXPOSE 8788
-CMD ["uv", "run", "python", "main.py"]
+CMD ["uv", "run", "python", "src/main.py"]

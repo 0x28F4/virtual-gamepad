@@ -2,7 +2,7 @@
 
 Copy this directory to the target host (for example with `scp -r deploy root@HOST:/root/deploy`).
 
-Copy `.env.example` to `.env` (already git-ignored), edit the values (`ROOM_TOKEN`, `INPUT_DRIVER`, etc.), and `source` it before running the commands below.
+Copy `.env.example` to `.env` (already git-ignored), edit the values (`ROOM_TOKEN`, etc.), and `source` it before running the commands below.
 
 ## Host setup
 
@@ -19,7 +19,6 @@ Provide environment variables and start the stack with Docker Compose:
 
 ```bash
 export ROOM_TOKEN=mysecret
-export INPUT_DRIVER=uinput
 docker compose up -d
 ```
 

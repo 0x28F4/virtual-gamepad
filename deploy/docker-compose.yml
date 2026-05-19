@@ -10,6 +10,5 @@ services:
       - "8788:8788"
     environment:
       ROOM_TOKEN: "${ROOM_TOKEN:-dev}"
-      INPUT_DRIVER: "${INPUT_DRIVER:-fake}"
     volumes:
       - /etc/localtime:/etc/localtime:ro

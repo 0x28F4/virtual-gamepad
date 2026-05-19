@@ -69,10 +69,10 @@ jobs:
         run: uv sync --locked
 
       - name: Compile Python
-        run: uv run python -m py_compile main.py
+        run: uv run python -m compileall -q src tests
 
-      - name: Import smoke test
-        run: uv run python -c "import main; app = main.build_app(main.load_config()); assert app is not None"
+      - name: Test backend
+        run: uv run pytest
 
   docker:
     name: Docker

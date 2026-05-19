@@ -12,6 +12,8 @@ from typing import Any
 
 from aiohttp import WSMsgType, web
 
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
 BUTTON_NAMES = (
     "a",
     "b",
@@ -41,8 +43,6 @@ class Config:
     port: int
     room_token: str
     max_players: int
-    input_driver: str
-    log_input: bool
     log_file: Path
     public_dir: Path
 
@@ -65,7 +65,7 @@ class PlayerSlots:
 
 class DeviceController(ABC):
     @abstractmethod
-    def update_state(self, player: int, state: dict[str, Any]) -> None:
+    def update_state(self, player: int, seq: int | float, state: dict[str, Any]) -> None:
         pass
 
     @abstractmethod
@@ -85,7 +85,7 @@ class TuiDeviceController(DeviceController):
         else:
             logging.info("controller TUI disabled because terminal is not interactive")
 
-    def update_state(self, player: int, state: dict[str, Any]) -> None:
+    def update_state(self, player: int, seq: int | float, state: dict[str, Any]) -> None:
         if self._tui:
             self._tui.update_state(player, state)
 
@@ -109,7 +109,7 @@ class UInputDeviceController(DeviceController):
         }
         self._last_states: dict[int, dict[Any, int]] = {}
 
-    def update_state(self, player: int, state: dict[str, Any]) -> None:
+    def update_state(self, player: int, seq: int | float, state: dict[str, Any]) -> None:
         events = self._events_from_state(state)
         last_state = self._last_states.get(player, {})
         changed = [(event, value) for event, value in events.items() if last_state.get(event) != value]
@@ -123,7 +123,7 @@ class UInputDeviceController(DeviceController):
         self._last_states[player] = events
 
     def release(self, player: int) -> None:
-        self.update_state(player, neutral_state())
+        self.update_state(player, -1, neutral_state())
         self._last_states.pop(player, None)
         logging.info("P%s released", player)
 
@@ -181,6 +181,38 @@ class UInputDeviceController(DeviceController):
             uinput.ABS_HAT0X: hat_value(buttons["dpadLeft"], buttons["dpadRight"]),
             uinput.ABS_HAT0Y: hat_value(buttons["dpadUp"], buttons["dpadDown"]),
         }
+
+
+class LogDeviceController(DeviceController):
+    def update_state(self, player: int, seq: int | float, state: dict[str, Any]) -> None:
+        logging.info(
+            "input received player=%s seq=%s %s",
+            player,
+            seq,
+            summarize_state(state),
+        )
+
+    def release(self, player: int) -> None:
+        pass
+
+
+class MultiplexDeviceController(DeviceController):
+    def __init__(self, controllers: list[DeviceController]) -> None:
+        self._controllers = controllers
+
+    def update_state(self, player: int, seq: int | float, state: dict[str, Any]) -> None:
+        for controller in self._controllers:
+            controller.update_state(player, seq, state)
+
+    def release(self, player: int) -> None:
+        for controller in self._controllers:
+            controller.release(player)
+
+    def close(self) -> None:
+        for controller in self._controllers:
+            close = getattr(controller, "close", None)
+            if close:
+                close()
 
 
 def pressed(button: dict[str, Any]) -> int:
@@ -255,11 +287,13 @@ def is_number(value: Any) -> bool:
 
 
 def create_device_controller(config: Config) -> DeviceController:
-    if config.input_driver == "fake":
-        return TuiDeviceController(config.max_players)
-    if config.input_driver == "uinput":
-        return UInputDeviceController(config.max_players)
-    raise ValueError(f"Unsupported INPUT_DRIVER={config.input_driver!r}")
+    return MultiplexDeviceController(
+        [
+            UInputDeviceController(config.max_players),
+            TuiDeviceController(config.max_players),
+            LogDeviceController(),
+        ]
+    )
 
 
 async def health(_: web.Request) -> web.Response:
@@ -321,14 +355,7 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                 continue
 
             latest_seq = input_message["seq"]
-            if config.log_input:
-                logging.info(
-                    "input received player=%s seq=%s %s",
-                    player,
-                    input_message["seq"],
-                    summarize_state(input_message["state"]),
-                )
-            device_controller.update_state(player, input_message["state"])
+            device_controller.update_state(player, input_message["seq"], input_message["state"])
     finally:
         device_controller.release(player)
         players.release(player)
@@ -338,16 +365,13 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
 
 
 def load_config() -> Config:
-    input_driver = os.environ.get("INPUT_DRIVER", "fake")
     return Config(
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8788")),
         room_token=os.environ.get("ROOM_TOKEN", "dev"),
         max_players=int(os.environ.get("MAX_PLAYERS", "4")),
-        input_driver=input_driver,
-        log_input=os.environ.get("LOG_INPUT") == "1",
-        log_file=Path(os.environ.get("LOG_FILE", Path(__file__).with_name("logs") / "gateway.log")),
-        public_dir=Path(os.environ.get("PUBLIC_DIR", Path(__file__).with_name("public"))),
+        log_file=Path(os.environ.get("LOG_FILE", BACKEND_DIR / "logs" / "gateway.log")),
+        public_dir=Path(os.environ.get("PUBLIC_DIR", BACKEND_DIR / "public")),
     )
 
 
@@ -404,12 +428,10 @@ def main() -> None:
     config = load_config()
     configure_logging(config)
     logging.info(
-        "starting gateway host=%s port=%s driver=%s max_players=%s log_input=%s log_file=%s public_dir=%s",
+        "starting gateway host=%s port=%s max_players=%s log_file=%s public_dir=%s",
         config.host,
         config.port,
-        config.input_driver,
         config.max_players,
-        config.log_input,
         config.log_file,
         config.public_dir,
     )
