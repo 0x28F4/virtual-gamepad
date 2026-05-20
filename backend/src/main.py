@@ -36,6 +36,7 @@ BUTTON_NAMES = (
 )
 
 AXIS_NAMES = ("leftX", "leftY", "rightX", "rightY")
+SERVER_SHUTDOWN_TIMEOUT = 1
 
 
 @dataclass(frozen=True)
@@ -447,7 +448,16 @@ def main() -> None:
         config.log_file,
         config.public_dir,
     )
-    web.run_app(build_app(config), host=config.host, port=config.port)
+    try:
+        web.run_app(
+            build_app(config),
+            host=config.host,
+            port=config.port,
+            handler_cancellation=True,
+            shutdown_timeout=SERVER_SHUTDOWN_TIMEOUT,
+        )
+    except KeyboardInterrupt:
+        logging.info("shutdown requested")
 
 
 if __name__ == "__main__":

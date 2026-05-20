@@ -59,7 +59,7 @@ class GamepadTui:
     def stop(self) -> None:
         self._running.clear()
         if self._thread and self._thread is not threading.current_thread():
-            self._thread.join(timeout=1)
+            self._thread.join(timeout=0.2)
 
     def update_state(self, player: int, state: dict[str, Any]) -> None:
         with self._lock:
@@ -92,7 +92,7 @@ class GamepadTui:
 
         while self._running.is_set():
             self._render(stdscr)
-            time.sleep(1 / 20)
+            self._running.wait(1 / 20)
 
     def _render(self, stdscr: curses.window) -> None:
         height, width = stdscr.getmaxyx()

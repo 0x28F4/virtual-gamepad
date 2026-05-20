@@ -8,9 +8,19 @@ services:
     devices:
       - /dev/uinput:/dev/uinput
     ports:
-      - "8788:8788"
+      - "127.0.0.1:8788:8788"
     environment:
       ROOM_TOKEN: "${ROOM_TOKEN:-dev}"
       TERM: "xterm-256color"
     volumes:
       - /etc/localtime:/etc/localtime:ro
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: virtual-gamepad-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: "${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in .env}"
+    depends_on:
+      - virtual-gamepad
