@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import logging.config
 import math
 import os
+import secrets
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aiohttp import WSMsgType, web
+from aiohttp import ClientError, ClientSession, ClientTimeout, WSMsgType, web
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -37,6 +42,15 @@ BUTTON_NAMES = (
 
 AXIS_NAMES = ("leftX", "leftY", "rightX", "rightY")
 SERVER_SHUTDOWN_TIMEOUT = 1
+MEDIAMTX_SYNC_ATTEMPTS = 10
+MEDIAMTX_SYNC_DELAY = 0.5
+
+
+@dataclass(frozen=True)
+class GameStreamConfig:
+    enabled: bool
+    playback_url: str
+    label: str
 
 
 @dataclass(frozen=True)
@@ -47,6 +61,8 @@ class Config:
     max_players: int
     log_file: Path
     public_dir: Path
+    game_stream: GameStreamConfig
+    public_host: str
 
 
 class PlayerSlots:
@@ -76,11 +92,11 @@ class DeviceController(ABC):
 
 
 class TuiDeviceController(DeviceController):
-    def __init__(self, max_players: int) -> None:
+    def __init__(self, max_players: int, join_text: str) -> None:
         self._tui = None
         from gamepad_tui import GamepadTui
 
-        tui = GamepadTui(max_players)
+        tui = GamepadTui(max_players, join_text)
         if tui.start():
             self._tui = tui
             logging.info("controller TUI started")
@@ -292,7 +308,7 @@ def create_device_controller(config: Config) -> DeviceController:
     return MultiplexDeviceController(
         [
             UInputDeviceController(config.max_players),
-            TuiDeviceController(config.max_players),
+            TuiDeviceController(config.max_players, join_text(config)),
             LogDeviceController(),
         ]
     )
@@ -300,6 +316,20 @@ def create_device_controller(config: Config) -> DeviceController:
 
 async def health(_: web.Request) -> web.Response:
     return web.json_response({"ok": True})
+
+
+async def client_config(request: web.Request) -> web.Response:
+    config: Config = request.app["config"]
+    stream = config.game_stream
+    return web.json_response(
+        {
+            "stream": {
+                "enabled": stream.enabled,
+                "playbackUrl": stream.playback_url,
+                "label": stream.label,
+            }
+        }
+    )
 
 
 async def static_handler(request: web.Request) -> web.StreamResponse:
@@ -367,14 +397,62 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
 
 
 def load_config() -> Config:
+    public_host = os.environ.get("PUBLIC_HOST", "").strip()
+    if not public_host:
+        public_host = discover_public_host()
+
+    room_token = secrets.token_urlsafe(18)
+
+    port = int(os.environ.get("PORT", "8788"))
+    stream_url = os.environ.get("GAME_STREAM_URL", "").strip()
+    if not stream_url and public_host:
+        stream_url = f"http://{public_host}:8889/live"
+
     return Config(
         host=os.environ.get("HOST", "0.0.0.0"),
-        port=int(os.environ.get("PORT", "8788")),
-        room_token=os.environ.get("ROOM_TOKEN", "dev"),
+        port=port,
+        room_token=room_token,
         max_players=int(os.environ.get("MAX_PLAYERS", "4")),
         log_file=Path(os.environ.get("LOG_FILE", BACKEND_DIR / "logs" / "gateway.log")),
         public_dir=Path(os.environ.get("PUBLIC_DIR", BACKEND_DIR / "public")),
+        game_stream=GameStreamConfig(
+            enabled=bool(stream_url),
+            playback_url=stream_url,
+            label="Game Stream",
+        ),
+        public_host=public_host,
     )
+
+
+def truthy(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def discover_public_host() -> str:
+    try:
+        with urllib.request.urlopen("https://checkip.amazonaws.com", timeout=5) as response:
+            return response.read().decode("utf-8").strip()
+    except (OSError, urllib.error.URLError) as exc:
+        logging.info("public host auto-discovery failed: %s", exc)
+        return ""
+
+
+def add_query_param(url: str, name: str, value: str) -> str:
+    parsed = urllib.parse.urlsplit(url)
+    params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    params.append((name, value))
+    return urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(params)))
+
+
+def join_text(config: Config) -> str:
+    if config.public_host:
+        return "Join: " + add_query_param(
+            f"http://{config.public_host}:{config.port}",
+            "token",
+            config.room_token,
+        )
+
+    return f"Join query: ?token={urllib.parse.quote(config.room_token)}"
 
 
 def configure_logging(config: Config) -> None:
@@ -389,15 +467,12 @@ def configure_logging(config: Config) -> None:
             "encoding": "utf-8",
         }
     }
-    root_handlers = ["file"]
-
-    if not sys.stdout.isatty():
-        handlers["console"] = {
-            "class": "logging.StreamHandler",
-            "stream": "ext://sys.stdout",
-            "formatter": "default",
-        }
-        root_handlers.append("console")
+    handlers["console"] = {
+        "class": "logging.StreamHandler",
+        "stream": "ext://sys.stdout",
+        "formatter": "default",
+    }
+    root_handlers = ["file", "console"]
 
     logging.config.dictConfig(
         {
@@ -424,15 +499,56 @@ async def cleanup_device_controller(app: web.Application) -> None:
         close()
 
 
+async def sync_mediamtx_config(app: web.Application) -> None:
+    config: Config = app["config"]
+    if not config.public_host:
+        return
+
+    url = "http://mediamtx:9997/v3/config/global/patch"
+    payload = {"webrtcAdditionalHosts": [config.public_host]}
+    timeout = ClientTimeout(total=2)
+
+    for attempt in range(1, MEDIAMTX_SYNC_ATTEMPTS + 1):
+        try:
+            async with ClientSession(timeout=timeout) as session:
+                async with session.patch(url, json=payload) as response:
+                    if response.status == 200:
+                        logging.info(
+                            "synced MediaMTX webrtcAdditionalHosts=%s",
+                            config.public_host,
+                        )
+                        return
+
+                    text = await response.text()
+                    logging.warning(
+                        "MediaMTX config sync failed status=%s body=%s",
+                        response.status,
+                        text,
+                    )
+        except ClientError as exc:
+            logging.info(
+                "MediaMTX config sync attempt %s/%s failed: %s",
+                attempt,
+                MEDIAMTX_SYNC_ATTEMPTS,
+                exc,
+            )
+
+        await asyncio.sleep(MEDIAMTX_SYNC_DELAY)
+
+    logging.warning("MediaMTX config sync did not complete")
+
+
 def build_app(config: Config) -> web.Application:
     app = web.Application()
     app["config"] = config
     app["players"] = PlayerSlots(config.max_players)
     app["device_controller"] = create_device_controller(config)
     app.router.add_get("/health", health)
+    app.router.add_get("/config", client_config)
     app.router.add_get("/ws", websocket_handler)
     app.router.add_get("/", static_handler)
     app.router.add_get("/{path:.*}", static_handler)
+    app.on_startup.append(sync_mediamtx_config)
     app.on_cleanup.append(cleanup_device_controller)
     return app
 
@@ -441,13 +557,18 @@ def main() -> None:
     config = load_config()
     configure_logging(config)
     logging.info(
-        "starting gateway host=%s port=%s max_players=%s log_file=%s public_dir=%s",
+        "starting gateway host=%s port=%s max_players=%s log_file=%s public_dir=%s public_host=%s stream_url=%s",
         config.host,
         config.port,
         config.max_players,
         config.log_file,
         config.public_dir,
+        config.public_host or "unknown",
+        config.game_stream.playback_url or "none",
     )
+    logging.info("generated room token=%s", config.room_token)
+    logging.info("%s", join_text(config))
+
     try:
         web.run_app(
             build_app(config),

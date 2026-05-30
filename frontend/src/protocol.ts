@@ -43,3 +43,13 @@ export type InputMessage = {
 export type ServerMessage =
   | { type: "hello"; player: number }
   | { type: "error"; message: string };
+
+export type GameStreamConfig = {
+  enabled: boolean;
+  playbackUrl: string;
+  label: string;
+};
+
+export type ClientConfig = {
+  stream: GameStreamConfig;
+};

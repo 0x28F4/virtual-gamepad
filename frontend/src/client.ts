@@ -1,6 +1,17 @@
-import { axisNames, buttonNames, type ButtonName, type ControllerState, type ServerMessage } from "./protocol";
+import {
+  axisNames,
+  buttonNames,
+  type ButtonName,
+  type ClientConfig,
+  type ControllerState,
+  type ServerMessage,
+} from "./protocol";
 import "./style.css";
 
+const streamSection = requireElement("stream-section");
+const streamFrame = requireElement<HTMLIFrameElement>("stream-frame");
+const streamStatus = requireElement("stream-status");
+const streamSource = requireElement("stream-source");
 const tokenInput = requireElement<HTMLInputElement>("token");
 const connectButton = requireElement<HTMLButtonElement>("connect");
 const connectionStatus = requireElement("connection-status");
@@ -17,6 +28,9 @@ let selectedGamepadIndex: number | null = null;
 let lastSentState: ControllerState | null = null;
 let seq = 0;
 let sentPackets = 0;
+
+const shouldAutoConnect = applyRoomTokenFromUrl();
+loadClientConfig();
 
 connectButton.addEventListener("click", () => {
   if (socket && socket.readyState === WebSocket.OPEN) {
@@ -47,7 +61,51 @@ window.addEventListener("pagehide", () => {
   socket?.close(1000, "Page hidden");
 });
 
+if (shouldAutoConnect) {
+  connect();
+}
+
 requestAnimationFrame(tick);
+
+function applyRoomTokenFromUrl(): boolean {
+  const token = new URLSearchParams(window.location.search).get("token");
+  if (token) {
+    tokenInput.value = token;
+    return true;
+  }
+
+  return false;
+}
+
+async function loadClientConfig(): Promise<void> {
+  try {
+    const response = await fetch("/config", { headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error(`Config request failed: ${response.status}`);
+
+    const config = (await response.json()) as ClientConfig;
+    renderStream(config.stream);
+  } catch (error) {
+    streamStatus.textContent = "Unavailable";
+    streamSource.textContent = error instanceof Error ? error.message : "Config request failed";
+    streamFrame.hidden = true;
+  }
+}
+
+function renderStream(stream: ClientConfig["stream"]): void {
+  if (!stream.enabled || !stream.playbackUrl) {
+    streamStatus.textContent = "Not configured";
+    streamSource.textContent = "No stream playback URL";
+    streamFrame.removeAttribute("src");
+    streamFrame.hidden = true;
+    return;
+  }
+
+  streamSection.hidden = false;
+  streamStatus.textContent = stream.label;
+  streamSource.textContent = stream.playbackUrl;
+  streamFrame.src = stream.playbackUrl;
+  streamFrame.hidden = false;
+}
 
 function connect(): void {
   socket?.close();

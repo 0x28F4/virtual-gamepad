@@ -25,6 +25,23 @@
         <button id="connect" type="button">Connect</button>
       </section>
 
+      <section id="stream-section" class="stream-panel">
+        <div class="stream-header">
+          <div>
+            <h2>Game Stream</h2>
+            <p id="stream-status">Loading stream config...</p>
+          </div>
+          <span id="stream-source">/config</span>
+        </div>
+        <iframe
+          id="stream-frame"
+          title="Game stream"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          allowfullscreen
+          hidden
+        ></iframe>
+      </section>
+
       <section class="grid">
         <article class="card">
           <h2>Connection</h2>

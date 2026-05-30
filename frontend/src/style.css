@@ -90,6 +90,53 @@ h2 {
   padding: 18px;
 }
 
+.stream-panel {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  background: rgba(16, 18, 21, 0.72);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.stream-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+}
+
+.stream-header h2 {
+  margin-bottom: 6px;
+}
+
+.stream-header p,
+.stream-header span {
+  margin: 0;
+  color: #b7b0a4;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.stream-header span {
+  max-width: 52%;
+  text-align: right;
+}
+
+iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #050607;
+}
+
+iframe[hidden] {
+  display: none;
+}
+
 label {
   display: grid;
   flex: 1;
@@ -172,12 +219,19 @@ pre {
   }
 
   .panel,
-  .grid {
+  .grid,
+  .stream-header {
     grid-template-columns: 1fr;
   }
 
-  .panel {
+  .panel,
+  .stream-header {
     display: grid;
+  }
+
+  .stream-header span {
+    max-width: none;
+    text-align: left;
   }
 
   button {

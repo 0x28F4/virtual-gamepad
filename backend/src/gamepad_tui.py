@@ -35,8 +35,9 @@ BUTTON_LABELS = {
 
 
 class GamepadTui:
-    def __init__(self, max_players: int) -> None:
+    def __init__(self, max_players: int, join_text: str) -> None:
         self._max_players = max_players
+        self._join_text = join_text
         self._states: dict[int, dict[str, Any] | None] = {
             player: None for player in range(1, max_players + 1)
         }
@@ -105,6 +106,7 @@ class GamepadTui:
 
         now = time.monotonic()
         self._add(stdscr, 0, 1, "INPUT", curses.color_pair(1) | curses.A_BOLD)
+        self._add(stdscr, 0, 9, self._join_text[: max(0, width - 10)], curses.color_pair(4))
 
         player_height = 7
         visible_players = max(1, min(self._max_players, (height - 2) // player_height))

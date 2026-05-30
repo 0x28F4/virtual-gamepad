@@ -25,11 +25,12 @@ Configuration:
 ```text
 HOST=0.0.0.0
 PORT=8788
-ROOM_TOKEN=dev
 MAX_PLAYERS=4
 LOG_FILE=backend/logs/gateway.log
 PUBLIC_DIR=backend/public
 ```
+
+The room token is generated on startup and written to the logs.
 
 The gateway always fans controller input out to Linux uinput, the terminal input
 visualizer, and the log file. Logs are written to `backend/logs/gateway.log` by
