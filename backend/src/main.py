@@ -469,7 +469,7 @@ def configure_logging(config: Config) -> None:
     }
     handlers["console"] = {
         "class": "logging.StreamHandler",
-        "stream": "ext://sys.stdout",
+        "stream": "ext://sys.stderr",
         "formatter": "default",
     }
     root_handlers = ["file", "console"]

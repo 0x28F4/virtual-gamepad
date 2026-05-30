@@ -1,5 +1,19 @@
 rtspTransports: [tcp]
 
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
+      - action: api
+        path:
+
 api: yes
 apiAddress: :9997
 
