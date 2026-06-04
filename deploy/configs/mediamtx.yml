@@ -11,11 +11,6 @@ authInternalUsers:
         path:
       - action: playback
         path:
-      - action: api
-        path:
-
-api: yes
-apiAddress: :9997
 
 hls: yes
 hlsAddress: :8888

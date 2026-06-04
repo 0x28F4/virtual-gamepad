@@ -6,18 +6,23 @@ RUN pnpm install --frozen-lockfile
 COPY frontend ./
 RUN pnpm build
 
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS backend
-WORKDIR /app/backend
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential linux-libc-dev \
-  && rm -rf /var/lib/apt/lists/*
-COPY backend/pyproject.toml backend/uv.lock ./
-RUN uv sync --locked --no-dev
+FROM golang:1.26-bookworm AS backend
+WORKDIR /src/backend
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
 COPY backend ./
-COPY --from=builder /app/frontend/dist ./public
+RUN CGO_ENABLED=0 go build -o /out/virtual-gamepad ./cmd/virtual-gamepad
+
+FROM debian:bookworm-slim AS runtime
+WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=backend /out/virtual-gamepad /usr/local/bin/virtual-gamepad
+COPY --from=builder /app/frontend/dist /app/public
 ENV HOST=0.0.0.0 \
     PORT=8788 \
-    TERM=xterm-256color \
-    PYTHONUNBUFFERED=1
+    PUBLIC_DIR=/app/public \
+    TERM=xterm-256color
 EXPOSE 8788
-CMD [".venv/bin/python", "src/main.py"]
+CMD ["virtual-gamepad"]

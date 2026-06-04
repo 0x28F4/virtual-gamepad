@@ -3,9 +3,8 @@ dist/
 frontend/dist/
 .env
 .venv/
-backend/.venv/
 backend/public/
+backend/virtual-gamepad
 __pycache__/
 *.pyc
 *.log
-backend/logs/

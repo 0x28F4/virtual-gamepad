@@ -3,6 +3,8 @@ services:
     image: bluenviron/mediamtx:1
     container_name: mediamtx
     restart: unless-stopped
+    environment:
+      MTX_WEBRTCADDITIONALHOSTS: "${PUBLIC_HOST:-}"
     volumes:
       - ./configs/mediamtx.yml:/mediamtx.yml:ro
     ports:
@@ -25,10 +27,10 @@ services:
       - "${CONTROLLER_BIND:-127.0.0.1}:8788:8788"
     environment:
       PUBLIC_HOST: "${PUBLIC_HOST:-}"
-      GAME_STREAM_URL: "${GAME_STREAM_URL:-}"
       TERM: "xterm-256color"
     volumes:
       - /etc/localtime:/etc/localtime:ro
+      - ./configs/config:/app/public/config:ro
     depends_on:
       - mediamtx
 

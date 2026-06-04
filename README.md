@@ -1,23 +1,57 @@
 # virtual-gamepad
 
-Browser-based controller sharing with a Python uinput gateway and Vite frontend.
+Browser-based controller sharing with a Go uinput gateway and Vite frontend.
 The browser sends gamepad input through WebSockets, and the same page can embed a
 low-latency game stream from a pluggable playback source.
 
-## Game stream
+## Architecture
 
-The gateway exposes runtime frontend config at `/config`. Configure the current
-stream source with environment variables. For the standard MediaMTX path, the
-backend derives `GAME_STREAM_URL` from `PUBLIC_HOST`; if `PUBLIC_HOST` is empty,
-it tries to discover the host through AWS checkip:
+```mermaid
+%%{init: {"flowchart": {"curve": "stepBefore"}}}%%
+flowchart LR
+  Frontend["Browser frontend"]
 
-```text
-PUBLIC_HOST=example.com
+  subgraph Backend["Go backend"]
+    Server["HTTP/WebSocket server"]
+    Controllers["Device controllers"]
+    UInput["uinput controller"]
+  end
+
+  UInputDevice["/dev/uinput"]
+  VirtualGamepads["Virtual gamepads"]
+  Game["Game / emulator"]
+  Stream["MediaMTX / game stream"]
+
+  Frontend -->|"gamepad input over WebSocket"| Server
+  Stream -->|"video playback"| Frontend
+  Server --> Controllers
+  Controllers --> UInput
+  UInput --> UInputDevice
+  UInputDevice --> VirtualGamepads
+  VirtualGamepads --> Game
 ```
 
-Override `GAME_STREAM_URL` only when playback is served from a different host,
-path, or protocol. If no playback URL can be derived, the controller UI still
-works and the stream panel reports that no stream is configured.
+## Game stream
+
+The frontend reads stream playback config from `/config`, which is a static
+public asset:
+
+```json
+{
+  "stream": {
+    "enabled": true,
+    "playbackUrl": "http://example.com:8889/live",
+    "label": "Game Stream"
+  }
+}
+```
+
+If no playback URL is configured, the controller UI still works and the stream
+panel reports that no stream is configured. In Docker Compose,
+`deploy/configs/config` is mounted over `/app/public/config`.
+
+`PUBLIC_HOST` is still used for the player join URL and MediaMTX WebRTC
+candidate config.
 
 The current experiment uses:
 
@@ -36,9 +70,9 @@ WebRTC playback: http://<PUBLIC_HOST>:8889/live
 LL-HLS fallback: http://<PUBLIC_HOST>:8888/live
 ```
 
-MediaMTX keeps a static mounted config. Its Control API is enabled internally on
-`http://mediamtx:9997`; on startup, the backend patches the global
-`webrtcAdditionalHosts` setting from `PUBLIC_HOST`.
+MediaMTX keeps a static mounted config. `PUBLIC_HOST` is passed to MediaMTX as
+`MTX_WEBRTCADDITIONALHOSTS` so
+WebRTC viewers receive the externally reachable host in ICE candidates.
 The backend always generates a room token and logs the tokenized player join URL
 on startup.
 
@@ -56,3 +90,28 @@ Container images are published from `main` to GitHub Container Registry:
 ```text
 ghcr.io/0x28f4/virtual-gamepad:latest
 ```
+
+## Run locally
+
+Install dependencies:
+
+```sh
+make setup
+```
+
+Run checks:
+
+```sh
+make test
+```
+
+Build the frontend assets into the Go backend public directory and run the
+gateway:
+
+```sh
+make run
+```
+
+The gateway needs `/dev/uinput`, so run it with permission to create uinput
+devices. It logs the generated join URL or token on startup. By default it
+serves `backend/public` on `http://localhost:8788`.

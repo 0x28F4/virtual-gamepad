@@ -57,22 +57,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          enable-cache: true
-
-      - name: Setup Python
-        run: uv python install
-
-      - name: Install dependencies
-        run: uv sync --locked
-
-      - name: Compile Python
-        run: uv run python -m compileall -q src tests
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
 
       - name: Test backend
-        run: uv run pytest
+        run: go test ./...
 
   docker:
     name: Docker

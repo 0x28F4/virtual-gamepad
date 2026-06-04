@@ -1,0 +1,7 @@
+{
+  "stream": {
+    "enabled": true,
+    "playbackUrl": "http://localhost:8889/live",
+    "label": "Game Stream"
+  }
+}

@@ -3,8 +3,8 @@
 Copy this directory to the target host (for example with `scp -r deploy root@HOST:/root/deploy`).
 
 Copy `.env.example` to `.env` and edit only the values you need to override.
-If `PUBLIC_HOST` or `GAME_STREAM_URL` are omitted, the backend discovers or
-derives them at startup.
+Set `PUBLIC_HOST` to the DNS name or public IP clients use to reach the host.
+Set the browser playback URL in `configs/config`.
 
 ## Host setup
 
@@ -40,12 +40,8 @@ docker compose logs virtual-gamepad
 ## Stream playback
 
 The controller UI embeds the MediaMTX WebRTC player through the pluggable stream
-config. For the standard MediaMTX path, the backend derives `GAME_STREAM_URL`
-from `PUBLIC_HOST`. If `PUBLIC_HOST` is omitted, it tries to discover the public
-IP through `https://checkip.amazonaws.com`.
-
-Set `PUBLIC_HOST` when you use DNS. Override `GAME_STREAM_URL` only when
-playback is served from a different host, path, or protocol.
+config. For the standard MediaMTX path, set `stream.playbackUrl` in
+`configs/config` to `http://<PUBLIC_HOST>:8889/live`.
 
 The MediaMTX path publishes to `rtmp://<PUBLIC_HOST>:1935/live` and plays back
 through WebRTC at `http://<PUBLIC_HOST>:8889/live`. If the controller UI is
@@ -63,10 +59,10 @@ MediaMTX listens on these host ports:
 8554/tcp  RTSP playback
 ```
 
-If the server IP changes and you do not use DNS, restart the stack so the backend
-rediscovers the public IP. The backend patches MediaMTX's advertised WebRTC host
-through MediaMTX's internal Control API; `configs/mediamtx.yml` stays
-host-agnostic.
+If the server IP changes and you do not use DNS, update `PUBLIC_HOST` in `.env`
+and recreate the stack. Compose passes it to MediaMTX as
+`MTX_WEBRTCADDITIONALHOSTS`, which sets the advertised WebRTC host while keeping
+`configs/mediamtx.yml` host-agnostic.
 
 ## Cloudflare Tunnel
 
