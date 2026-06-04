@@ -9,7 +9,7 @@ help:
 	@printf '  %-22s %s\n' 'make setup' 'Install frontend dependencies'
 	@printf '  %-22s %s\n' 'make test' 'Run backend tests and frontend typecheck'
 	@printf '  %-22s %s\n' 'make build' 'Build frontend assets and backend binary'
-	@printf '  %-22s %s\n' 'make run' 'Build frontend assets and run gateway with sudo'
+	@printf '  %-22s %s\n' 'make run' 'Build frontend assets and run gateway'
 	@printf '  %-22s %s\n' 'make frontend-dev' 'Run Vite dev server'
 	@printf '  %-22s %s\n' 'make docker-build' 'Build the container image'
 	@printf '  %-22s %s\n' 'make compose-up' 'Start the deploy compose stack'
@@ -27,7 +27,7 @@ build: frontend-build-backend backend-build
 
 .PHONY: run
 run: frontend-build-backend
-	cd backend && sudo $(GO) run ./cmd/virtual-gamepad
+	cd backend && $(GO) run ./cmd/virtual-gamepad
 
 .PHONY: run-no-sudo
 run-no-sudo: frontend-build-backend
@@ -63,7 +63,7 @@ backend-build:
 
 .PHONY: backend-run
 backend-run:
-	cd backend && sudo $(GO) run ./cmd/virtual-gamepad
+	cd backend && $(GO) run ./cmd/virtual-gamepad
 
 .PHONY: backend-run-no-sudo
 backend-run-no-sudo:
