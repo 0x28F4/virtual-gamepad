@@ -12,6 +12,7 @@ services:
       - "8554:8554" # RTSP playback
       - "8888:8888" # LL-HLS playback
       - "8889:8889" # WebRTC HTTP signaling and player
+      - "127.0.0.1:9997:9997" # MediaMTX API for local inspection
       - "8189:8189/udp" # WebRTC media over UDP
       - "8189:8189/tcp" # WebRTC media over TCP fallback
 

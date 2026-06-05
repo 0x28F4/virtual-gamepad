@@ -57,12 +57,16 @@ MediaMTX listens on these host ports:
 8189/tcp  WebRTC media TCP fallback
 8888/tcp  LL-HLS playback
 8554/tcp  RTSP playback
+9997/tcp  MediaMTX API, bound to 127.0.0.1 by Compose
 ```
 
 If the server IP changes and you do not use DNS, update `PUBLIC_HOST` in `.env`
 and recreate the stack. Compose passes it to MediaMTX as
 `MTX_WEBRTCADDITIONALHOSTS`, which sets the advertised WebRTC host while keeping
 `configs/mediamtx.yml` host-agnostic.
+
+The MediaMTX API is enabled for local session inspection. Because stream auth is
+disabled for this experiment, the Compose file binds the API to localhost only.
 
 ## Cloudflare Tunnel
 
@@ -82,6 +86,31 @@ CLOUDFLARE_TUNNEL_TOKEN=your-token
 ```
 
 The `cloudflared` sidecar shares Docker Compose's default network with the controller container, so it can reach the gateway by the `virtual-gamepad` service name. The controller port is only bound to `127.0.0.1` on the host; public traffic should enter through Cloudflare Tunnel.
+
+### Controller and stream on one hostname
+
+For a single hostname such as `play.example.com`, configure these tunnel routes
+in this order:
+
+```text
+play.example.com /live*  -> http://mediamtx:8889
+play.example.com         -> http://virtual-gamepad:8788
+```
+
+Then set the controller stream config to:
+
+```json
+{
+  "stream": {
+    "enabled": true,
+    "playbackUrl": "https://play.example.com/live",
+    "label": "Game Stream"
+  }
+}
+```
+
+Keep `PUBLIC_HOST` set to the same public hostname or IP clients use to reach
+MediaMTX.
 
 If you do not enable Cloudflare Tunnel, use:
 
