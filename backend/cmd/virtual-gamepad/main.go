@@ -100,14 +100,26 @@ func joinText(publicHost string, port int, token string) string {
 		return "Join query: ?token=" + url.QueryEscape(token)
 	}
 
-	u := url.URL{
-		Scheme: "http",
-		Host:   net.JoinHostPort(publicHost, strconv.Itoa(port)),
-	}
+	u := publicURL(publicHost, port)
 	query := u.Query()
 	query.Set("token", token)
 	u.RawQuery = query.Encode()
 	return "Join: " + u.String()
+}
+
+func publicURL(publicHost string, port int) url.URL {
+	if parsed, err := url.Parse(publicHost); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		return *parsed
+	}
+
+	u := url.URL{
+		Scheme: "http",
+		Host:   publicHost,
+	}
+	if publicHost == "localhost" || net.ParseIP(publicHost) != nil {
+		u.Host = net.JoinHostPort(publicHost, strconv.Itoa(port))
+	}
+	return u
 }
 
 func randomToken(bytes int) (string, error) {
